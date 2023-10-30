@@ -1,1 +1,1 @@
-from .Visual_Prompt import *
+from .FMModel import FMCLIP
