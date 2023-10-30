@@ -1,19 +1,13 @@
-pretrain: ./exp/ViT-B/32/32/model_best.pt
+pretrain: ./exp/ViT-B/32/8/model_best.pt
 seed: 1024
 data:
     dataset: kinetics-TPS
     modality: RGB
-    num_segments: 32
-    seg_length: 1
-    split: 1
+    num_segments: 8
     batch_size: 64
-    workers: 16
-    gpus: 4
-    num_classes: 15
-    image_tmpl: 'img_{:05d}.jpg'
-    val_list: 'dataset/test_list.txt' #
-    label_list: 'dataset/category_info.txt'
-    index_bias: 1
+    workers: 8
+    val_list: 'dataset/case_test.txt' # test_list.txt' #
+    label_list: 'dataset/annotations/category_info.json'
     input_size: 224
     randaug:
         N: 0 #2
@@ -23,11 +17,7 @@ network:
     init: True
     drop_out: 0.0
     emb_dropout: 0.0
-    type: clip_ktps
-    sim_header: "Transf"   #Transf   meanP  LSTM  Conv_1D  Transf_cls
-    fix_text: False
-    fix_img: False
-    describe:
+    type: fm_clip
+    sim_header: "meanP"   #Transf   meanP  LSTM  Conv_1D  Transf_cls
 logging:
-    print_freq: 10
     eval_freq: 1

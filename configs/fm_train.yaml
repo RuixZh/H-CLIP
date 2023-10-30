@@ -4,38 +4,32 @@ seed: 1024
 data:
     dataset: kinetics-TPS
     modality: RGB
-    num_segments: 32
-    seg_length: 1
+    num_segments: 8
     batch_size: 64
     workers: 8
-    num_classes: 15
-    image_tmpl: 'img_{:05d}.jpg'
     train_list: 'dataset/train_list.txt'
-    val_list: 'dataset/val_list.txt' #
-    label_list: 'dataset/category_info.txt'
-    index_bias: 1
+    val_list: 'dataset/val_list.txt'
+    label_list: 'dataset/annotations/category_info.json'
     input_size: 224
     randaug:
-        N: 2 #2
-        M: 9  #9
-    random_shift: True
+        N: 2
+        M: 9
 network:
-    arch: ViT-B/32  #ViT-B/32 ViT-B/16
+    arch: RN50x64 #ViT-B/32 ViT-B/16
     init: True
     tsm: False
     drop_out: 0.0
     emb_dropout: 0.0
-    type: clip_fm
-    sim_header: "Transf"  #Transf   meanP  LSTM Conv_1D Transf_cls
+    type: fm_clip
+    sim_header: "meanP"  #Transf   meanP  LSTM Conv_1D Transf_cls
     joint: False
-    describe:
 solver:
     type: cosine
-    epochs: 50
+    epochs: 30
     start_epoch: 0
     epoch_offset: 0
     optim: adamw
-    lr: 5.e-6
+    lr: 1.e-5
     lr_warmup_step: 5
     momentum: 0.9
     weight_decay: 0.2
@@ -43,9 +37,7 @@ solver:
     lr_decay_factor: 0.1
     clip_gradient: 20
     loss_type: nll
-    evaluate: False
     ratio: 1
     f_ratio: 10
 logging:
-    print_freq: 10
     eval_freq: 1
