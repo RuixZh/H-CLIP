@@ -23,7 +23,7 @@ class VideoRecord(object):
 
     @property
     def label(self):
-        return ' '.join(self._data[1].split('_'))
+        return self._data[1]
 
 
 class GroupTransform(object):
@@ -48,60 +48,26 @@ class VideoDataset(Dataset):
 
         self._parse_list()
         self._gen_label_dict()
-        self.text_prompt()
+        # self.text_prompt()
 
     def _parse_list(self):
         self.video_list = [VideoRecord(x.strip().split('\t')) for x in open(self.list_file)]
 
-    @property
-    def categories(self):
-        return [[i, l] for i, l in self.label_mapping.items()]
-
-    def text_prompt(self):
-        text_aug = f"The video shows {{}}"
-        text_dict = {}
-        with open(self.category_file, 'r') as f:
-            for line in f.readlines():
-                l, d = line.strip().split('\t')
-                if l in [str(i) for i in range(1, 6)]:
-                text_dict[self.label_mapping_reverse[l]] = clip.tokenize(text_aug.format(d))
-
-        classes = torch.cat([text_dict[v] for v in range(len(text_dict))])
-        self.classes = classes
-
-        # text_aug = [f"The video shows {{}}",
-                    # f"This is an assessment of {{}}",
-                    # f"{{}} is an evaluation item of Fugl-Meyer Assessment",
-                    # f"The person is doing {{}}, to assess how the motor recovery is",
-                    # f"Can you recognize the assessment of {{}}?", f"Video classification of {{}}",
-                    # f"Human action of {{}}", f"{{}}, a video of Fugl-Meyer Assessment",
-                    # f"{{}}"]
-        # self.text_dict = {}
-        # classes = {}
-        # self.num_text_aug = len(text_aug)
-        # with open(self.category_file, 'r') as f:
-        #     for line in f.readlines():
-        #         l, d = line.strip().split('\t')
-        #         classes[self.label_mapping_reverse[l]] = d
-        #
-        # for ii, txt in enumerate(text_aug):
-        #     self.text_dict[ii] = torch.cat([clip.tokenize(txt.format(c)) for i, c in classes.items()])
-        #
-        # self.classes  = torch.cat([v for k, v in self.text_dict.items()])
-
     def _gen_label_dict(self):
-        self.label_mapping = {}
-        self.label_mapping_reverse = {}
-        i = 0
-        for action in [str(i) for i in range(1, 6)]:
-            self.label_mapping[i] = action
-            self.label_mapping_reverse[action] = i
-            i += 1
-            for score in [str(j) for j in range(3)]:
-                self.label_mapping[i] = action+score
-                self.label_mapping_reverse[action+score] = i
-                i += 1
-        self.nb_label = len(self.label_mapping)
+        item = {}  # (12,)
+        score = {}   # (4,)
+        prefix = ''
+        with open(self.category_file) as f:
+            b = json.load(f)
+        for i in range(1, 5):
+            item[str(i)] = b[str(i)]
+            prefix = b[str(i)]
+            for j in range(0, 3):
+                score[str(i)+str(j)] = prefix + b[str(i)+str(j)]
+        self.score_des = clip.tokenize(list(score.values()))
+        self.item_des = clip.tokenize(list(item.values()))
+        self.score_map = {k: i for i,k in enumerate(score.keys())}
+        self.item_map = {k: i for i,k in enumerate(item.keys())}
 
     def _transform(self):
         input_mean = [0.48145466, 0.4578275, 0.40821073]
@@ -160,23 +126,22 @@ class VideoDataset(Dataset):
         return [Image.open(filepath).convert('RGB')]
 
     def _load_knowledge(self, record):
-        # f, c, v = record.video_path.split('/')
-        # path2imgs = os.path.join('dataset', 'cleaned_frames', c, v)
-        path2imgs = os.path.join('dataset',record.video_path)
-        label = record.label
+        path2imgs = os.path.join('dataset', 'frames', record.video_path)
+        anns_file = os.path.join('dataset', 'annotations', record.video_path + '.txt')
+        item_label, score_label = self.item_map[record.label[0]], self.score_map[record.label]
 
-        filenames = [f for f in os.listdir(path2imgs)]
-        filenames.sort(key=lambda x:int(x.split('.')[0].split('_')[1]))
+        img_filenames = [f for f in os.listdir(path2imgs)]
+        img_filenames.sort(key=lambda x:int(x.split('.')[0].split('_')[1]))
 
-        nb_frame = len(filenames)
+        nb_frame = len(img_filenames)
         try:
             segment_indices = self._sample_indices(nb_frame) if self.isTraining else self._get_val_indices(nb_frame)
         except ValueError:
             print(record.video_path)
-        filenames = [filenames[i] for i in segment_indices]
+        img_filenames = [img_filenames[i] for i in segment_indices]
 
         images = []
-        for i, filename in enumerate(filenames):
+        for i, filename in enumerate(img_filenames):
             try:
                 frame_file = os.path.join(path2imgs, filename)
                 image = self._load_image(frame_file)
@@ -185,10 +150,21 @@ class VideoDataset(Dataset):
             except OSError:
                 print('ERROR: Could not read image "%s"' % frame_file)
                 raise
-        video_emb = self.transform(images)
-        label_id = self.label_mapping_reverse[label]
+        frame_emb = self.transform(images)
 
-        return video_emb, label_id
+        # text_emb = torch.zeros((5, 77), dtype=np.compat.long)
+        lines = ''
+        with open(anns_file, 'r') as f:
+            for l in f.readlines():
+                lines += l
+        try:
+            text_emb = clip.tokenize(lines)[0]
+        except Exception as e:
+            print(anns_file)
+            raise
+
+
+        return frame_emb, text_emb, item_label, score_label
 
     def __getitem__(self, idx):
         record = self.video_list[idx]
